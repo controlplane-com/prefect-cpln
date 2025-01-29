@@ -1,0 +1,4 @@
+.pytest_cache/
+prefect_cpln/__pycache__/
+venv/
+tests/__pycache__/
