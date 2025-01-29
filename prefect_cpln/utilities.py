@@ -123,7 +123,7 @@ class CplnLogsMonitor:
 
         # Construct the query parameters
         query_params = {
-            "query": f'{{gvc="{self._org}", location="{self._location}", workload="{self._workload_name}", replica=~"command-{self._command_id}.+"}}',
+            "query": f'{{gvc="{self._gvc}", location="{self._location}", workload="{self._workload_name}", replica=~"command-{self._command_id}.+"}}',
             "start": nanos,
             "direction": "forward",
             "limit": 1000,

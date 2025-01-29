@@ -1201,23 +1201,9 @@ class CplnWorker(BaseWorker):
             task_status.started(pid)
 
         # Monitor the job until completion
-        events_replicator = CplnEventsReplicator(
-            logger=logger,
-            client=client,
-            org=configuration.org,
-            gvc=configuration.namespace,
-            workload_name=job["name"],
-            command_id=job_id,
-            worker_resource=self._event_resource(),
-            related_resources=self._event_related_resources(
-                configuration=configuration
-            ),
-            timeout_seconds=configuration.pod_watch_timeout_seconds,
+        status_code = await self._watch_job(
+            logger, job_name, job_id, configuration, client
         )
-        async with events_replicator:
-            status_code = await self._watch_job(
-                logger, job_name, job_id, configuration, client
-            )
 
         return CplnWorkerResult(identifier=pid, status_code=status_code)
 
@@ -1705,7 +1691,7 @@ class CplnWorker(BaseWorker):
         try:
             # Wait for the job to complete and handle logs
             await asyncio.wait_for(
-                logs_monitor.monitor(),
+                logs_monitor.monitor(lambda message: print(message)),
                 timeout=configuration.job_watch_timeout_seconds,
             )
         except asyncio.TimeoutError:
