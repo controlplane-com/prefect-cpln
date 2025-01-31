@@ -13,7 +13,7 @@ dependencies = [
 name = "prefect-cpln"
 description = "Prefect integrations for interacting with the Control Plane platform."
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 license = { text = "Apache License 2.0" }
 keywords = ["prefect"]
 authors = [{ name = "Control Plane Corp.", email = "support@controlplane.com" }]

@@ -66,6 +66,9 @@ class CplnLogsMonitor:
         # Store tasks into a list
         tasks = [monitor_status_task, monitor_logs_task]
 
+        # Log a message indicating status check and logs monitoring will start soon
+        self._logger.info("Starting status check and logs monitoring...")
+
         # Wait for either task to complete
         _, pending = await asyncio.wait(
             tasks,
@@ -175,6 +178,12 @@ class CplnLogsMonitor:
                     self._logger.info(f"Connection to logs service has closed: {e}")
 
         except Exception as e:
+            print(
+                "Error occurred while streaming logs - "
+                "Job will continue to run but logs will "
+                "no longer be streamed to stdout."
+            )
+
             # Log an error message if an exception occurs while streaming logs
             self._logger.warning(
                 (

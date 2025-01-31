@@ -1,12 +1,14 @@
+.DS_Store
 LICENSE
 MANIFEST.in
+PKG-INFO
 README.md
 pyproject.toml
 setup.cfg
 prefect_cpln/__init__.py
 prefect_cpln/_version.py
-prefect_cpln/constants.py
 prefect_cpln/common.py
+prefect_cpln/constants.py
 prefect_cpln/credentials.py
 prefect_cpln/events.py
 prefect_cpln/exceptions.py
@@ -21,3 +23,5 @@ prefect_cpln.egg-info/entry_points.txt
 prefect_cpln.egg-info/requires.txt
 prefect_cpln.egg-info/top_level.txt
 tests/test_block_standards.py
+tests/test_credentials.py
+tests/test_worker.py

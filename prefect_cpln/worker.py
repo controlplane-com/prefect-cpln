@@ -679,8 +679,11 @@ class CplnWorkerJobConfiguration(BaseJobConfiguration):
 
         # Check if a location is found in the GVC
         if gvc.get("spec", {}).get("staticPlacement", {}).get("locationLinks", []):
-            # Set the location to the first location found in the GVC
-            return gvc["spec"]["staticPlacement"]["locationLinks"][0]
+            # Extract the first location of the specified GVC
+            location: str = gvc["spec"]["staticPlacement"]["locationLinks"][0]
+
+            # Return the location name
+            return location.split("/")[-1]
         else:
             # Raise an error if no location is found in the GVC
             raise ValueError(
@@ -1189,7 +1192,9 @@ class CplnWorker(BaseWorker):
         job_id = self._start_job(configuration, client, job)
 
         # Log the successful start of the job and return the job ID
-        logger.info(f"Started job with ID: {job_id}")
+        logger.info(
+            f"[CplnWorker] Started job with ID: {job_id} in location {configuration.location}"
+        )
 
         # Get infrastructure pid
         pid = self._get_infrastructure_pid(
@@ -1675,7 +1680,7 @@ class CplnWorker(BaseWorker):
         """
 
         # Log a message to indicate that the job is being monitored
-        logger.debug(f"Job {job_name!r}: Monitoring job...")
+        logger.info(f"Job {job_name!r}: Monitoring job...")
 
         # Initialize the logs monitor to stream logs for the specified job
         logs_monitor = CplnLogsMonitor(

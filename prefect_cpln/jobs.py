@@ -476,7 +476,7 @@ class CplnJob(JobBlock):
         id = response.headers["location"].split("/")[-1]
 
         # Log the successful start of the job and return the job ID
-        self.logger.info(f"Started job with ID: {id}")
+        self.logger.info(f"[CplnJob] Started job with ID: {id}")
 
         # Set the job ID and exit the function
         return id
@@ -546,6 +546,9 @@ class CplnJobRun(JobRun[Dict[str, Any]]):
             CplnJobTimeoutError: If the Control Plane job times out.
             ValueError: If `wait_for_completion` is never called.
         """
+
+        # Log a message
+        self.logger.info("Waiting for the job to complete.")
 
         # Initialize the logs list
         self.log = []
