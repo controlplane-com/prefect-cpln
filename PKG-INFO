@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: prefect-cpln
-Version: 1.0.5
+Version: 1.0.6
 Summary: Prefect integrations for interacting with the Control Plane platform.
 Author-email: "Prefect Technologies, Inc." <help@prefect.io>
 License: Apache License 2.0
@@ -17,7 +17,7 @@ Classifier: Programming Language :: Python :: 3.10
 Classifier: Programming Language :: Python :: 3.11
 Classifier: Programming Language :: Python :: 3.12
 Classifier: Topic :: Software Development :: Libraries
-Requires-Python: >=3.9
+Requires-Python: >=3.8
 Description-Content-Type: text/markdown
 License-File: LICENSE
 Requires-Dist: exceptiongroup
@@ -67,7 +67,7 @@ Install `prefect-cpln` with `pip`:
  pip install prefect-cpln
 ```
 
-Requires an installation of Python 3.9+.
+Requires an installation of Python 3.8+.
 
 We recommend using a Python virtual environment manager such as pipenv, conda or virtualenv.
 

@@ -1715,26 +1715,27 @@ class CplnWorker(BaseWorker):
         lifecycle_stage = data.get("lifecycleStage")
 
         # Determine the status code if not successful
-        match lifecycle_stage:
-            case "failed":
-                logger.error(f"Job {job_name!r}: Job has failed.")
-                return 1
-            case "cancelled":
-                logger.error(f"Job {job_name!r}: Job has been cancelled.")
-                return 2
-            case "pending" | "running":
-                # Job is still running
-                logger.warning(
-                    (
-                        "Error occurred while streaming logs - "
-                        "Job will continue to run but logs will "
-                        "no longer be streamed to stdout."
-                    ),
-                    exc_info=True,
-                )
+        if lifecycle_stage == "failed":
+            logger.error(f"Job {job_name!r}: Job has failed.")
+            return 1
 
-                # Return 3 to indicate that the job is still running
-                return 3
+        if lifecycle_stage == "cancelled":
+            logger.error(f"Job {job_name!r}: Job has been cancelled.")
+            return 2
+
+        if lifecycle_stage == "pending" or lifecycle_stage == "running":
+            # Job is still running
+            logger.warning(
+                (
+                    "Error occurred while streaming logs - "
+                    "Job will continue to run but logs will "
+                    "no longer be streamed to stdout."
+                ),
+                exc_info=True,
+            )
+
+            # Return 3 to indicate that the job is still running
+            return 3
 
         # Log a message to indicate that the job has completed successfully
         logger.info(f"Job {job_name!r}: Job has completed successfully.")

@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 # General
 DEFAULT_GRACE_SECONDS: int = 30
@@ -6,7 +6,7 @@ DEFAULT_GRACE_SECONDS: int = 30
 # Jobs Related
 COMMAND_STATUS_CHECK_DELAY: int = 5
 JOB_WATCH_OFFSET_MINUTES: int = 5
-LIFECYCLE_FINAL_STAGES: list[str] = ["completed", "failed", "cancelled"]
+LIFECYCLE_FINAL_STAGES: List[str] = ["completed", "failed", "cancelled"]
 
 # Events Related
 EVENT_CHECK_DELAY_SECONDS: int = 5
