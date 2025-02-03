@@ -876,8 +876,8 @@ class CplnKubernetesConverter:
         """
 
         # Pick default values
-        cpu = "50m"
-        memory = "128Mi"
+        cpu = "500m"
+        memory = "512Mi"
 
         # Get the resources from the container
         if container.get("resources", {}).get("limits"):
