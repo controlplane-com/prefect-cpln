@@ -1171,7 +1171,7 @@ class CplnWorker(BaseWorker):
         workload_name = workload["name"]
 
         # Start the job
-        job_id = self._start_job(configuration, client, workload)
+        job_id = await self._start_job(configuration, client, workload)
 
         # Log the successful start of the job and the job ID
         logger.info(
@@ -1331,7 +1331,7 @@ class CplnWorker(BaseWorker):
             f"/org/{configuration.org}/gvc/{configuration.namespace}/workload/{name}"
         )
 
-    def _start_job(
+    async def _start_job(
         self,
         configuration: CplnWorkerJobConfiguration,
         client: CplnClient,
@@ -1349,6 +1349,9 @@ class CplnWorker(BaseWorker):
         Returns:
             The job ID of the newly started job.
         """
+
+        # Wait a couple of seconds before starting the job
+        await asyncio.sleep(15)
 
         # Extract the name of the workload from the manifest
         name = manifest["name"]
