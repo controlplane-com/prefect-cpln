@@ -348,13 +348,12 @@ class CplnJob(JobBlock):
     namespace: str = Field(
         default_factory=lambda: os.getenv("CPLN_GVC"),
         description=(
-            "The Control Plane GVC location. Defaults to the value in the environment variable CPLN_LOCATION. "
-            "If the location is still not found, the first location of the specified GVC will be used. "
+            "The Control Plane GVC to create jobs within. Defaults to the value in the environment variable CPLN_GVC. "
             "If you are hosting the worker on Control Plane, the environment variable will be automatically injected to your workload."
         ),
     )
     location: str = Field(
-        default_factory=lambda: os.getenv("CPLN_LOCATION"),
+        default_factory=lambda: os.getenv("CPLN_LOCATION").split("/")[-1],
         description=(
             "The Control Plane GVC location. Defaults to the value in the environment variable CPLN_LOCATION. "
             "If the location is still not found, the first location of the specified GVC will be used. "
