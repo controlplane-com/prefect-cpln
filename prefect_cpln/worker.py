@@ -709,6 +709,20 @@ class CplnKubernetesConverter:
                 "debug": False,
                 "suspend": True,  # Prefect will be the one triggering schedules jobs, not us
             },
+            "firewall": {
+                "external": {
+                    "inboundAllowCIDR": [],
+                    "inboundBlockedCIDR": [],
+                    "outboundAllowCIDR": ["0.0.0.0/0"],
+                    "outboundAllowHostname": [],
+                    "outboundAllowPort": [],
+                    "outboundBlockedCIDR": [],
+                },
+                "internal": {
+                    "inboundAllowType": "none",
+                    "inboundAllowWorkload": [],
+                },
+            },
         }
 
         # Set identity link
