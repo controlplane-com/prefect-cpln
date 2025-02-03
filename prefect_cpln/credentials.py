@@ -162,6 +162,10 @@ class CplnClient:
         # Ensure that the headers are included in the keyword arguments
         kwargs["headers"] = headers
 
+        # If timeout was never specified in the keyword arguments, use a default timeout value
+        if not kwargs["timeout"]:
+            kwargs["timeout"] = constants.HTTP_REQUEST_TIMEOUT
+
         # Start the retry loop; it will run until the retry limit is reached
         while retry_count <= constants.HTTP_REQUEST_MAX_RETRIES:
             # Log retries, but not the first attempt
@@ -171,9 +175,7 @@ class CplnClient:
                 )
 
             # Perform the HTTP request using the `requests.request` method
-            response = requests.request(
-                method, url, timeout=constants.HTTP_REQUEST_TIMEOUT, **kwargs
-            )
+            response = requests.request(method, url, **kwargs)
 
             # If the response status code is not 429, handle it as a normal response
             if response.status_code != 429:
