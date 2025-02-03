@@ -163,7 +163,7 @@ class CplnClient:
         kwargs["headers"] = headers
 
         # If timeout was never specified in the keyword arguments, use a default timeout value
-        if not kwargs["timeout"]:
+        if not kwargs.get("timeout"):
             kwargs["timeout"] = constants.HTTP_REQUEST_TIMEOUT
 
         # Start the retry loop; it will run until the retry limit is reached
