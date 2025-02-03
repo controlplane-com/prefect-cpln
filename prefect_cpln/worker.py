@@ -135,7 +135,6 @@ from prefect.workers.base import (
 )
 from prefect_cpln import constants
 from prefect_cpln.credentials import CplnClient, CplnConfig
-from prefect_cpln.events import CplnEventsReplicator
 from prefect_cpln.utilities import (
     CplnLogsMonitor,
     slugify_label_key,
@@ -152,40 +151,6 @@ else:
 
 
 ### Helpers ###
-
-
-def _get_default_job_manifest_template() -> Dict[str, Any]:
-    """Returns the default job manifest template used by the Kubernetes worker."""
-    return {
-        "apiVersion": "batch/v1",
-        "kind": "Job",
-        "metadata": {
-            "labels": "{{ labels }}",
-            "namespace": "{{ namespace }}",
-            "generateName": "{{ name }}",
-        },
-        "spec": {
-            "backoffLimit": 0,
-            "ttlSecondsAfterFinished": "{{ finished_job_ttl }}",
-            "template": {
-                "spec": {
-                    "parallelism": 1,
-                    "completions": 1,
-                    "restartPolicy": "Never",
-                    "serviceAccountName": "{{ service_account_name }}",
-                    "containers": [
-                        {
-                            "name": "prefect-job",
-                            "env": "{{ env }}",
-                            "image": "{{ image }}",
-                            "imagePullPolicy": "{{ image_pull_policy }}",
-                            "args": "{{ command }}",
-                        }
-                    ],
-                }
-            },
-        },
-    }
 
 
 def _get_base_job_manifest():
@@ -247,8 +212,8 @@ class CplnWorkerJobConfiguration(BaseJobConfiguration):
             to the Control Plane platform.
         job_watch_timeout_seconds: The number of seconds to wait for the job to
             complete before timing out. If `None`, the worker will wait indefinitely.
-        pod_watch_timeout_seconds: The number of seconds to wait for the Control Plane job to
-            complete before timing out.
+        pod_watch_timeout_seconds: Number of seconds to watch for the workload creation
+            before timing out.
         stream_output: Whether or not to stream the job's output.
     """
 
@@ -258,20 +223,24 @@ class CplnWorkerJobConfiguration(BaseJobConfiguration):
     org: Optional[str] = Field(
         default_factory=lambda: os.getenv("CPLN_ORG"),
         description=(
-            "Your Control Plane organization name. Defaults to the value in the environment variable 'CPLN_ORG'."
+            "The Control Plane organization to create jobs within. "
+            "Defaults to the value in the environment variable CPLN_ORG. "
+            "If you are hosting the worker on Control Plane, the environment variable will be automatically injected to your workload."
         ),
     )
     namespace: Optional[str] = Field(
         default_factory=lambda: os.getenv("CPLN_GVC"),
         description=(
-            "The Control Plane GVC to use for this job. Defaults to the value in the environment variable 'CPLN_GVC' "
-            "unless a GVC is already present in a provided job manifest in 'metadata.namespace'."
+            "The Control Plane GVC to create jobs within. Defaults to the value in the environment variable CPLN_GVC. "
+            "If you are hosting the worker on Control Plane, the environment variable will be automatically injected to your workload."
         ),
     )
     location: Optional[str] = Field(
         default_factory=lambda: os.getenv("CPLN_LOCATION"),
         description=(
-            "The Control Plane GVC location to use for this job. Defaults to the value in the environment variable 'CPLN_LOCATION'"
+            "The Control Plane GVC location. Defaults to the value in the environment variable CPLN_LOCATION. "
+            "If the location is still not found, the first location of the specified GVC will be used. "
+            "If you are hosting the worker on Control Plane, the environment variable will be automatically injected to your workload."
         ),
     )
     job_manifest: Dict[str, Any] = Field(default_factory=_get_base_job_manifest)
@@ -738,7 +707,7 @@ class CplnKubernetesConverter:
             "defaultOptions": {
                 "capacityAI": False,
                 "debug": False,
-                "suspend": False,
+                "suspend": True,  # Prefect will be the one triggering schedules jobs, not us
             },
         }
 
@@ -810,8 +779,16 @@ class CplnKubernetesConverter:
             "image": kubernetes_container["image"],
             "cpu": resources["cpu"],
             "memory": resources["memory"],
-            "command": " ".join(kubernetes_container["args"]),
+            "args": kubernetes_container["args"],
         }
+
+        # Set command if specified
+        if kubernetes_container.get("command"):
+            container["command"] = " ".join(kubernetes_container["command"])
+
+        # Set args if specified
+        if kubernetes_container.get("args"):
+            container["args"] = kubernetes_container["args"]
 
         # Set working directory
         if kubernetes_container.get("workingDir"):
@@ -853,10 +830,6 @@ class CplnKubernetesConverter:
         history_limit = 5
         restart_policy = "Never"
 
-        # Set restart policy
-        if pod_spec.get("restartPolicy"):
-            restart_policy = pod_spec["restartPolicy"]
-
         # Define job spec
         job_spec = {
             "schedule": schedule,
@@ -864,6 +837,10 @@ class CplnKubernetesConverter:
             "historyLimit": history_limit,
             "restartPolicy": restart_policy,
         }
+
+        # Set restart policy
+        if pod_spec.get("restartPolicy"):
+            job_spec["restartPolicy"] = pod_spec["restartPolicy"]
 
         # Set active deadline seconds if found
         if pod_spec.get("activeDeadlineSeconds"):
@@ -1081,20 +1058,25 @@ class CplnWorkerVariables(BaseVariables):
     org: Optional[str] = Field(
         default_factory=lambda: os.getenv("CPLN_ORG"),
         description=(
-            "Your Control Plane organization name. Defaults to the value in the environment variable 'CPLN_ORG'."
+            "The Control Plane organization to create jobs within. "
+            "Defaults to the value in the environment variable CPLN_ORG. "
+            "If you are hosting the worker on Control Plane, the environment variable will be automatically injected to your workload."
         ),
     )
     namespace: Optional[str] = Field(
         default_factory=lambda: os.getenv("CPLN_GVC"),
         description=(
-            "The Control Plane GVC to use for this job. Defaults to the value in the environment variable 'CPLN_GVC' "
-            "unless a GVC is already present in a provided job manifest in 'metadata.namespace'."
+            "The Control Plane GVC location. Defaults to the value in the environment variable CPLN_LOCATION. "
+            "If the location is still not found, the first location of the specified GVC will be used. "
+            "If you are hosting the worker on Control Plane, the environment variable will be automatically injected to your workload."
         ),
     )
     location: Optional[str] = Field(
         default_factory=lambda: os.getenv("CPLN_LOCATION"),
         description=(
-            "The Control Plane GVC location to use for this job. Defaults to the value in the environment variable 'CPLN_LOCATION'"
+            "The Control Plane GVC location. Defaults to the value in the environment variable CPLN_LOCATION. "
+            "If the location is still not found, the first location of the specified GVC will be used. "
+            "If you are hosting the worker on Control Plane, the environment variable will be automatically injected to your workload."
         ),
     )
     image: Optional[str] = Field(
@@ -1109,13 +1091,13 @@ class CplnWorkerVariables(BaseVariables):
     job_watch_timeout_seconds: Optional[int] = Field(
         default=None,
         description=(
-            "Number of seconds to wait for each event emitted by a job before "
-            "timing out. If not set, the worker will wait for each event indefinitely."
+            "Number of seconds to wait for the job to complete before marking it as"
+            " crashed. Defaults to `None`, which means no timeout will be enforced."
         ),
     )
     pod_watch_timeout_seconds: int = Field(
         default=constants.HTTP_REQUEST_TIMEOUT,
-        description="Number of seconds to watch for the job creation before timing out.",
+        description="Number of seconds to watch for the workload creation before timing out.",
     )
     stream_output: bool = Field(
         default=True,
@@ -1182,23 +1164,23 @@ class CplnWorker(BaseWorker):
         # Log a message to indicate that the job is being created
         logger.info("Creating Control Plane job...")
 
-        # Create the job
-        job = self._create_job(configuration, client)
+        # Create the cron workload
+        workload = self._create_workload(configuration, client)
 
         # Extract the job name from the job manifest
-        job_name = job["name"]
+        workload_name = workload["name"]
 
         # Start the job
-        job_id = self._start_job(configuration, client, job)
+        job_id = self._start_job(configuration, client, workload)
 
-        # Log the successful start of the job and return the job ID
+        # Log the successful start of the job and the job ID
         logger.info(
             f"[CplnWorker] Started job with ID: {job_id} in location {configuration.location}"
         )
 
         # Get infrastructure pid
         pid = self._get_infrastructure_pid(
-            configuration.org, configuration.namespace, job
+            configuration.org, configuration.namespace, workload
         )
 
         # Indicate that the job has started
@@ -1207,9 +1189,13 @@ class CplnWorker(BaseWorker):
 
         # Monitor the job until completion
         status_code = await self._watch_job(
-            logger, job_name, job_id, configuration, client
+            logger, workload_name, job_id, configuration, client
         )
 
+        # Delete the cron workload
+        await self._delete_workload(pid, configuration)
+
+        # Return worker result with pid and status code
         return CplnWorkerResult(identifier=pid, status_code=status_code)
 
     async def kill_infrastructure(
@@ -1219,7 +1205,7 @@ class CplnWorker(BaseWorker):
         grace_seconds: int = constants.DEFAULT_GRACE_SECONDS,
     ):
         """
-        Stops a job for a cancelled flow run based on the provided infrastructure PID
+        Deletes the cron workload for a cancelled flow run based on the provided infrastructure PID
         and run configuration.
 
         Args:
@@ -1228,7 +1214,7 @@ class CplnWorker(BaseWorker):
             grace_seconds: The number of seconds to wait before killing the job.
         """
 
-        await self._stop_job(infrastructure_pid, configuration, grace_seconds)
+        await self._delete_workload(infrastructure_pid, configuration, grace_seconds)
 
     async def teardown(self, *exc_info):
         """
@@ -1275,7 +1261,7 @@ class CplnWorker(BaseWorker):
         ),
         reraise=True,
     )
-    def _create_job(
+    def _create_workload(
         self, configuration: CplnWorkerJobConfiguration, client: CplnClient
     ) -> constants.CplnObjectManifest:
         """
@@ -1311,7 +1297,8 @@ class CplnWorker(BaseWorker):
         try:
             # Attempt to retrieve the workload by its name if it already exists
             client.get(
-                f"/org/{configuration.org}/gvc/{configuration.namespace}/workload/{name}"
+                f"/org/{configuration.org}/gvc/{configuration.namespace}/workload/{name}",
+                True,
             )
 
             # If no exception has been thrown, then update the workload with the new manifest
@@ -1336,6 +1323,7 @@ class CplnWorker(BaseWorker):
         client.post(
             f"/org/{configuration.org}/gvc/{configuration.namespace}/workload",
             workload_manifest,
+            timeout=configuration.pod_watch_timeout_seconds,
         )
 
         # Retrieve and return the newly created workload for confirmation
@@ -1387,7 +1375,7 @@ class CplnWorker(BaseWorker):
         # Set the job ID and exit the function
         return id
 
-    async def _stop_job(
+    async def _delete_workload(
         self,
         infrastructure_pid: str,
         configuration: CplnWorkerJobConfiguration,
@@ -1412,14 +1400,14 @@ class CplnWorker(BaseWorker):
         client: CplnClient = configuration.config.get_api_client()
 
         # Parse the infrastructure PID to extract the organization ID, namespace, and job name
-        job_org_name, job_namespace, job_name = self._parse_infrastructure_pid(
+        job_org_name, job_namespace, workload_name = self._parse_infrastructure_pid(
             infrastructure_pid
         )
 
         # Check if the job is running in the expected namespace
         if job_namespace != configuration.namespace:
             raise InfrastructureNotAvailable(
-                f"Unable to kill job {job_name!r}: The job is running in namespace "
+                f"Unable to kill job {workload_name!r}: The job is running in namespace "
                 f"{job_namespace!r} but this worker expected jobs to be running in "
                 f"namespace {configuration.namespace!r} based on the work pool and "
                 "deployment configuration."
@@ -1428,7 +1416,7 @@ class CplnWorker(BaseWorker):
         # Check if the job is running in the expected organization
         if job_org_name != configuration.org:
             raise InfrastructureNotAvailable(
-                f"Unable to kill job {job_name!r}: The job is running on another "
+                f"Unable to kill job {workload_name!r}: The job is running on another "
                 "Control Plane organization than the one specified by the infrastructure PID."
             )
 
@@ -1439,13 +1427,13 @@ class CplnWorker(BaseWorker):
 
             # Delete the job
             client.delete(
-                f"/org/{configuration.org}/gvc/{configuration.namespace}/workload/{job_name}"
+                f"/org/{configuration.org}/gvc/{configuration.namespace}/workload/{workload_name}"
             )
         except requests.RequestException as e:
             # Raise an error if the job was not found
             if e.response.status_code == 404:
                 raise InfrastructureNotFound(
-                    f"Unable to kill job {job_name!r}: The job was not found."
+                    f"Unable to kill job {workload_name!r}: The job was not found."
                 ) from e
             else:
                 # Raise the original exception if the error is not due to the job not being found
@@ -1610,7 +1598,7 @@ class CplnWorker(BaseWorker):
         return secret
 
     def _get_infrastructure_pid(
-        self, org: str, gvc: str, job: constants.CplnObjectManifest
+        self, org: str, gvc: str, workload: constants.CplnObjectManifest
     ) -> str:
         """
         Generates a Control Plane infrastructure PID.
@@ -1619,7 +1607,7 @@ class CplnWorker(BaseWorker):
         Args:
             org (str): The name of the organization.
             gvc (str): The name of the GVC that the job belongs to.
-            job (constants.Manifest): The Control Plane workload manifest.
+            workload (constants.Manifest): The Control Plane workload manifest.
             client (CplnClient): The API client used to communicate with the Control Plane.
 
         Returns:
@@ -1627,10 +1615,10 @@ class CplnWorker(BaseWorker):
         """
 
         # Extract the job name
-        job_name = job["name"]
+        workload_name = workload["name"]
 
         # Construct the infrastructure PID and return it
-        return f"{org}:{gvc}:{job_name}"
+        return f"{org}:{gvc}:{workload_name}"
 
     def _parse_infrastructure_pid(
         self, infrastructure_pid: str
@@ -1646,15 +1634,15 @@ class CplnWorker(BaseWorker):
         """
 
         # Split the infrastructure PID into its component parts
-        org_name, namespace, job_name = infrastructure_pid.split(":", 2)
+        org_name, namespace, workload_name = infrastructure_pid.split(":", 2)
 
         # Return the organization ID, namespace, and job name
-        return org_name, namespace, job_name
+        return org_name, namespace, workload_name
 
     async def _watch_job(
         self,
         logger: logging.Logger,
-        job_name: str,
+        workload_name: str,
         job_id: str,
         configuration: CplnWorkerJobConfiguration,
         client: CplnClient,
@@ -1665,7 +1653,7 @@ class CplnWorker(BaseWorker):
 
         Args:
             logger (logging.Logger): Logger instance for recording job status updates.
-            job_name (str): The name of the job being monitored.
+            workload_name (str): The name of the job being monitored.
             job_id (str): The unique ID of the job being monitored.
             configuration (CplnWorkerJobConfiguration): The configuration object containing
                 details about the job's namespace and organization.
@@ -1680,7 +1668,7 @@ class CplnWorker(BaseWorker):
         """
 
         # Log a message to indicate that the job is being monitored
-        logger.info(f"Job {job_name!r}: Monitoring job...")
+        logger.info(f"Job {workload_name!r}: Monitoring job...")
 
         # Initialize the logs monitor to stream logs for the specified job
         logs_monitor = CplnLogsMonitor(
@@ -1689,7 +1677,7 @@ class CplnWorker(BaseWorker):
             configuration.org,
             configuration.namespace,
             configuration.location,
-            job_name,
+            workload_name,
             job_id,
         )
 
@@ -1701,14 +1689,14 @@ class CplnWorker(BaseWorker):
             )
         except asyncio.TimeoutError:
             logger.error(
-                f"Job {job_name!r}: Job did not complete within "
+                f"Job {workload_name!r}: Job did not complete within "
                 f"timeout of {configuration.job_watch_timeout_seconds}s."
             )
             return -1
 
         # Make a GET request to fetch the job status
         data = client.get(
-            f"/org/{configuration.org}/gvc/{configuration.namespace}/workload/{job_name}/-command/{job_id}"
+            f"/org/{configuration.org}/gvc/{configuration.namespace}/workload/{workload_name}/-command/{job_id}"
         )
 
         # Extract the lifecycle stage from the response data
@@ -1716,21 +1704,17 @@ class CplnWorker(BaseWorker):
 
         # Determine the status code if not successful
         if lifecycle_stage == "failed":
-            logger.error(f"Job {job_name!r}: Job has failed.")
+            logger.error(f"Job {workload_name!r}: Job has failed.")
             return 1
 
         if lifecycle_stage == "cancelled":
-            logger.error(f"Job {job_name!r}: Job has been cancelled.")
+            logger.error(f"Job {workload_name!r}: Job has been cancelled.")
             return 2
 
         if lifecycle_stage == "pending" or lifecycle_stage == "running":
             # Job is still running
-            logger.warning(
-                (
-                    "Error occurred while streaming logs - "
-                    "Job will continue to run but logs will "
-                    "no longer be streamed to stdout."
-                ),
+            logger.error(
+                "An error occurred while waiting for the job to compelte - exiting...",
                 exc_info=True,
             )
 
@@ -1738,7 +1722,7 @@ class CplnWorker(BaseWorker):
             return 3
 
         # Log a message to indicate that the job has completed successfully
-        logger.info(f"Job {job_name!r}: Job has completed successfully.")
+        logger.info(f"Job {workload_name!r}: Job has completed successfully.")
 
         # Return 0 to indicate that the job has completed successfully
         return 0

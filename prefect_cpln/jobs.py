@@ -339,15 +339,27 @@ class CplnJob(JobBlock):
     )
     org: str = Field(
         default_factory=lambda: os.getenv("CPLN_ORG"),
-        description="The organization name.",
+        description=(
+            "The Control Plane organization to create jobs within. "
+            "Defaults to the value in the environment variable CPLN_ORG. "
+            "If you are hosting the worker on Control Plane, the environment variable will be automatically injected to your workload."
+        ),
     )
     namespace: str = Field(
         default_factory=lambda: os.getenv("CPLN_GVC"),
-        description="The GVC to create and run the job in.",
+        description=(
+            "The Control Plane GVC location. Defaults to the value in the environment variable CPLN_LOCATION. "
+            "If the location is still not found, the first location of the specified GVC will be used. "
+            "If you are hosting the worker on Control Plane, the environment variable will be automatically injected to your workload."
+        ),
     )
     location: str = Field(
         default_factory=lambda: os.getenv("CPLN_LOCATION"),
-        description="The location in which the job will run.",
+        description=(
+            "The Control Plane GVC location. Defaults to the value in the environment variable CPLN_LOCATION. "
+            "If the location is still not found, the first location of the specified GVC will be used. "
+            "If you are hosting the worker on Control Plane, the environment variable will be automatically injected to your workload."
+        ),
     )
     v1_job: constants.KubernetesObjectManifest = Field(
         default=...,
@@ -356,12 +368,6 @@ class CplnJob(JobBlock):
             "The Kubernetes job manifest to run. This dictionary can be produced "
             "using `yaml.safe_load`."
         ),
-    )
-    api_kwargs: Dict[str, Any] = Field(
-        default_factory=dict,
-        title="Additional API Arguments",
-        description="Additional arguments to include in the Control Plane API calls.",
-        examples=[{"pretty": "true"}],
     )
     delete_after_completion: bool = Field(
         default=True,
@@ -390,7 +396,7 @@ class CplnJob(JobBlock):
 
         # Initialize a worker configuration
         configuration = CplnWorkerJobConfiguration(
-            config=self.credentials.get_client(),
+            config=self.credentials.config,
             org=self.org,
             namespace=self.namespace,
             job_manifest=self.v1_job,

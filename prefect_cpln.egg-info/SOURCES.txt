@@ -10,7 +10,6 @@ prefect_cpln/_version.py
 prefect_cpln/common.py
 prefect_cpln/constants.py
 prefect_cpln/credentials.py
-prefect_cpln/events.py
 prefect_cpln/exceptions.py
 prefect_cpln/flows.py
 prefect_cpln/jobs.py

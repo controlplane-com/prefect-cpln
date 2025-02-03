@@ -30,7 +30,7 @@ class CplnClient:
 
     ### Public Methods ###
 
-    def get(self, path: str, **kwargs) -> dict:
+    def get(self, path: str, skipStatusErrorMessage: bool = False, **kwargs) -> dict:
         """
         Sends a GET request to the specified API path.
 
@@ -46,7 +46,9 @@ class CplnClient:
         self.logger.debug(f"[cpln_client_get] making GET request to {path}")
 
         # Make the GET request to the given path using the centralized retry logic
-        response = self._make_cpln_request_with_retry("get", path, **kwargs)
+        response = self._make_cpln_request_with_retry(
+            "get", path, skipStatusErrorMessage, **kwargs
+        )
 
         # Parse the response as JSON and return it to the caller
         return response.json()
@@ -68,7 +70,9 @@ class CplnClient:
         self.logger.debug(f"[cpln_client_post] making POST request to {path}")
 
         # Make the POST request to the given path using the centralized retry logic
-        return self._make_cpln_request_with_retry("post", path, json=body, **kwargs)
+        return self._make_cpln_request_with_retry(
+            "post", path, False, json=body, **kwargs
+        )
 
     def put(self, path: str, body: dict, **kwargs) -> requests.Response:
         """
@@ -87,7 +91,9 @@ class CplnClient:
         self.logger.debug(f"[cpln_client_put] making PUT request to {path}")
 
         # Make the PUT request to the given path using the centralized retry logic
-        return self._make_cpln_request_with_retry("put", path, json=body, **kwargs)
+        return self._make_cpln_request_with_retry(
+            "put", path, False, json=body, **kwargs
+        )
 
     def patch(self, path: str, body: dict, **kwargs) -> requests.Response:
         """
@@ -105,7 +111,9 @@ class CplnClient:
         self.logger.debug(f"[cpln_client_patch] making PATCH request to {path}")
 
         # Make the PATCH request to the given path using the centralized retry logic
-        return self._make_cpln_request_with_retry("patch", path, json=body, **kwargs)
+        return self._make_cpln_request_with_retry(
+            "patch", path, False, json=body, **kwargs
+        )
 
     def delete(self, path: str, **kwargs) -> requests.Response:
         """
@@ -118,11 +126,11 @@ class CplnClient:
         self.logger.debug(f"[cpln_client_delete] making DELETE request to {path}")
 
         # Make the DELETE request to the given path using the centralized retry logic
-        return self._make_cpln_request_with_retry("delete", path, **kwargs)
+        return self._make_cpln_request_with_retry("delete", path, False, **kwargs)
 
     ### Private Methods ###
     def _make_cpln_request_with_retry(
-        self, method, path, **kwargs
+        self, method, path, skipStatusErrorMessage: bool = False, **kwargs
     ) -> requests.Response:
         """
         Centralized retry logic for HTTP requests.
@@ -176,10 +184,13 @@ class CplnClient:
                     # Return the response object for successful requests
                     return response
                 except requests.HTTPError as e:
-                    # Log the error message and raise an exception
-                    self.logger.error(
-                        f"[_make_cpln_request_with_retry] Http Error: {response.text}"
-                    )
+                    # Log the error message if not skipped
+                    if not skipStatusErrorMessage:
+                        self.logger.error(
+                            f"[_make_cpln_request_with_retry] Http Error: {response.text}"
+                        )
+
+                    # Reraise the exception
                     raise e
 
             # If the response status code is 429, log a warning and prepare to retry
@@ -279,5 +290,8 @@ class CplnCredentials(Block):
         if self.config:
             return self.config.get_api_client()
 
-        # Initialize a new CplnClient with the token specified
-        return CplnClient(token=token)
+        # Create new config using the token specified
+        self.config = CplnConfig(token=token)
+
+        # Get and return the Control Plane API client
+        return self.config.get_api_client()
