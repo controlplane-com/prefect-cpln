@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: prefect-cpln
-Version: 1.0.13
+Version: 1.0.14
 Summary: Prefect integrations for interacting with the Control Plane platform.
 Author-email: "Prefect Technologies, Inc." <help@prefect.io>
 License: Apache License 2.0

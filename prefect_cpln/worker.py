@@ -709,7 +709,7 @@ class CplnKubernetesConverter:
                 "debug": False,
                 "suspend": True,  # Prefect will be the one triggering schedules jobs, not us
             },
-            "firewall": {
+            "firewallConfig": {
                 "external": {
                     "inboundAllowCIDR": [],
                     "inboundBlockedCIDR": [],
