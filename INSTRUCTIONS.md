@@ -89,6 +89,7 @@ bindings:
 ---
 kind: volumeset
 name: prefect
+gvc: prefect
 spec:
   fileSystemType: ext4
   initialCapacity: 10
@@ -96,9 +97,11 @@ spec:
 ---
 kind: identity
 name: prefect
+gvc: prefect
 ---
 kind: workload
 name: prefect-server
+gvc: prefect
 spec:
   type: stateful
   identityLink: //gvc/prefect/identity/prefect
@@ -164,8 +167,7 @@ After creating a Control Plane work pool on your Prefect server, head back to th
 ```yaml
 kind: workload
 name: prefect-worker
-description: prefect-worker
-tags: {}
+gvc: prefect
 spec:
   type: standard
   identityLink: //gvc/prefect/identity/prefect
