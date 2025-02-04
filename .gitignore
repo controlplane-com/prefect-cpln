@@ -3,3 +3,4 @@ prefect_cpln/__pycache__/
 venv/
 tests/__pycache__/
 build/
+.DS_store
