@@ -236,7 +236,7 @@ class CplnWorkerJobConfiguration(BaseJobConfiguration):
         ),
     )
     location: Optional[str] = Field(
-        default_factory=lambda: os.getenv("CPLN_LOCATION").split("/")[-1],
+        default_factory=lambda: os.getenv("CPLN_LOCATION", "").split("/")[-1],
         description=(
             "The Control Plane GVC location. Defaults to the value in the environment variable CPLN_LOCATION. "
             "If the location is still not found, the first location of the specified GVC will be used. "
@@ -293,6 +293,22 @@ class CplnWorkerJobConfiguration(BaseJobConfiguration):
         # Call the method from the parent class
         super().prepare_for_flow_run(flow_run, deployment, flow)
 
+        # Update to use first location if not specified
+        self.prepare_location()
+
+        # Update configuration env and job manifest env
+        self._update_prefect_api_url_if_local_server()
+        self._populate_env_in_manifest()
+
+        # Update labels in job manifest
+        self._slugify_labels()
+
+        # Add defaults to job manifest if necessary
+        self._populate_image_if_not_present()
+        self._populate_command_if_not_present()
+        self._populate_generate_name_if_not_present()
+
+    def prepare_for_job_run(self):
         # Update to use first location if not specified
         self.prepare_location()
 
@@ -1085,7 +1101,7 @@ class CplnWorkerVariables(BaseVariables):
         ),
     )
     location: Optional[str] = Field(
-        default_factory=lambda: os.getenv("CPLN_LOCATION").split("/")[-1],
+        default_factory=lambda: os.getenv("CPLN_LOCATION", "").split("/")[-1],
         description=(
             "The Control Plane GVC location. Defaults to the value in the environment variable CPLN_LOCATION. "
             "If the location is still not found, the first location of the specified GVC will be used. "

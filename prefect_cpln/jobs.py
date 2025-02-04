@@ -78,11 +78,17 @@ def create_workload(
     # Get the Control Plane API client
     client = cpln_credentials.get_client()
 
-    # Create the workload
-    response = client.put(path, json=body)
+    # Create / Update the workload
+    client.put(path, body)
 
-    # Fetch and return the resource
-    return client.get(response.headers["location"]).json()
+    # Extract workload name from the manifest
+    workload_name = body["name"]
+
+    # Construct workload link
+    workload_link = f"{path}/{workload_name}"
+
+    # Fetch and return the workload
+    return client.get(workload_link)
 
 
 @task
@@ -320,10 +326,16 @@ def replace_workload(
     client = cpln_credentials.get_client()
 
     # Make a PUT request
-    response = client.put(path, body)
+    client.put(path, body)
+
+    # Extract workload name from the manifest
+    workload_name = body["name"]
+
+    # Construct workload link
+    workload_link = f"{path}/{workload_name}"
 
     # Fetch and return the workload
-    return client.get(response.headers["location"])
+    return client.get(workload_link)
 
 
 ### Classes ###
@@ -353,7 +365,7 @@ class CplnJob(JobBlock):
         ),
     )
     location: str = Field(
-        default_factory=lambda: os.getenv("CPLN_LOCATION").split("/")[-1],
+        default_factory=lambda: os.getenv("CPLN_LOCATION", "").split("/")[-1],
         description=(
             "The Control Plane GVC location. Defaults to the value in the environment variable CPLN_LOCATION. "
             "If the location is still not found, the first location of the specified GVC will be used. "
@@ -401,6 +413,9 @@ class CplnJob(JobBlock):
             job_manifest=self.v1_job,
         )
 
+        # Prepare the configuration
+        configuration.prepare_for_job_run()
+
         # Convert the Kubernetes job to a Control Plane workload
         workload = CplnKubernetesConverter(configuration).convert()
 
@@ -409,7 +424,7 @@ class CplnJob(JobBlock):
             self.location = configuration.location
 
         # Create the workload
-        created_workload = await create_workload.fn(
+        created_workload = create_workload.fn(
             cpln_credentials=self.credentials,
             org=self.org,
             gvc=self.namespace,
@@ -481,7 +496,9 @@ class CplnJob(JobBlock):
         id = response.headers["location"].split("/")[-1]
 
         # Log the successful start of the job and return the job ID
-        self.logger.info(f"[CplnJob] Started job with ID: {id}")
+        self.logger.info(
+            f"[CplnJob] Started job with ID: {id} in location {self.location}"
+        )
 
         # Set the job ID and exit the function
         return id
@@ -497,7 +514,7 @@ class CplnJobRun(JobRun[Dict[str, Any]]):
         command_id: str,
     ):
         # Received attributes
-        self.logs = None
+        self.logs = []
         self._completed = False
         self._cpln_job = cpln_job
         self._workload = workload
@@ -518,20 +535,6 @@ class CplnJobRun(JobRun[Dict[str, Any]]):
         )
 
     ### Public Methods ###
-
-    async def _cleanup(self):
-        """Deletes the Control Plane cron job workload."""
-
-        # Perform workload deletion
-        await delete_workload.fn(
-            cpln_credentials=self._cpln_job.credentials,
-            org=self._cpln_job.org,
-            gvc=self._cpln_job.namespace,
-            name=self._workload_name,
-        )
-
-        # Log the delete message
-        self.logger.info(f"Job {self._workload_name} deleted.")
 
     @sync_compatible
     async def wait_for_completion(self, print_func: Optional[Callable] = None):
@@ -560,7 +563,7 @@ class CplnJobRun(JobRun[Dict[str, Any]]):
 
         try:
             # Wait for the job to complete and handle logs
-            job_status = await asyncio.wait_for(
+            await asyncio.wait_for(
                 self._cpln_logs_monitor.monitor(
                     lambda message: self._add_log_message(message, print_func)
                 ),
@@ -572,10 +575,10 @@ class CplnJobRun(JobRun[Dict[str, Any]]):
             )
 
         # If the job was not completed, then raise a runtime error
-        if job_status != "completed":
+        if self._cpln_logs_monitor.job_status != "completed":
             raise RuntimeError(
                 f"Job {self._workload_name} hasn't complete due to status "
-                f"{job_status}, check the logs for more information."
+                f"{self._cpln_logs_monitor.job_status}, check the logs for more information."
             )
 
         # Mark as completed
@@ -613,6 +616,20 @@ class CplnJobRun(JobRun[Dict[str, Any]]):
 
     ### Private Methods ###
 
+    async def _cleanup(self):
+        """Deletes the Control Plane cron job workload."""
+
+        # Perform workload deletion
+        delete_workload.fn(
+            cpln_credentials=self._cpln_job.credentials,
+            org=self._cpln_job.org,
+            gvc=self._cpln_job.namespace,
+            name=self._workload_name,
+        )
+
+        # Log the delete message
+        self.logger.info(f"Job {self._workload_name} deleted.")
+
     def _add_log_message(self, message: str, print_func: Optional[Callable] = None):
         """
         Receives a message and adds it to the log list.
@@ -626,4 +643,4 @@ class CplnJobRun(JobRun[Dict[str, Any]]):
             print_func(message)
 
         # Add the message to the log list
-        self.log.append(message)
+        self.logs.append(message)
