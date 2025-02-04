@@ -12,7 +12,7 @@ Ensure you have the following installed and configured:
 - [Docker](https://www.docker.com)
 - [Prefect v2](https://docs-2.prefect.io/latest/getting-started/installation/) CLI
 - A [Control Plane](https://console.cpln.io) account with superuser privileges
-- [Control Plane CLI](https://docs.controlplane.com/reference/cli) installed and [authenticated](https://docs.controlplane.com/guides/manage-profile) with your Control Plane account.
+- [Control Plane CLI](https://docs.controlplane.com/reference/cli) installed and [authenticated](https://docs.controlplane.com/guides/manage-profile) with your Control Plane account
 
 ## Build and Push the Prefect Docker Image
 
@@ -40,6 +40,17 @@ Use `cpln` CLI to build and push the Prefect image to your private registry:
 ```bash
 cpln image build --name prefect:cpln-2.20.16 --push
 ```
+
+## Create a Service Account Key
+
+Before creating the Control Plane Work Pool, you must generate a service account key with superuser privileges. This key will be required for authentication in the `cpln` configuration.
+
+To generate the key:
+
+1. Navigate to the [Control Plane Console](https://console.cpln.io).
+2. Create a service account and assign it to the superusers group.
+3. Navigate to keys and generate a key for the service account.
+4. Store the key securely, as it will be used in the `CplnConfig` when creating the Work Pool.
 
 ## Deploy the Prefect Server
 
@@ -155,8 +166,13 @@ Once the Prefect server is running, create a Control Plane Work Pool in Prefect.
 - Navigate to the Prefect UI and create a new work pool.
 - Select Control Plane as the type.
 - Name it `cpln` (or another name, updating references accordingly).
-- Leave the Organization and Location fields blank unless you wish to override defaults. Control Plane injects `CPLN_ORG`, `CPLN_GVC`, and `CPLN_LOCATION` automatically, so you don't have to see Organization, GVC and location.
-- You don't have to create a `CplnConfig`, the worker that we will configure below is going to have the sufficient policies to create workloads and read their logs. If you still wish to create `CplnConfig`, you will need to obtain a [service account](https://docs.controlplane.com/guides/create-service-account) key and use it in the Token field.
+- Leave the Organization and Location fields blank unless you wish to override defaults. Control Plane injects `CPLN_ORG`, `CPLN_GVC`, and `CPLN_LOCATION` automatically, so you don't have to set Organization, GVC and location manually.
+- Use the service account key created earlier in the `CplnConfig` for authentication.
+- Add the following environment variable:
+
+```json
+{ "PREFECT_API_URL": "http://prefect-server.prefect.cpln.local/api" }
+```
 
 ## Deploy a Prefect Worker
 
