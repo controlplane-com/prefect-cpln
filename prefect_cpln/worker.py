@@ -1432,7 +1432,7 @@ class CplnWorker(BaseWorker):
         """
 
         # Retrieve the API client to interact with the Control Plane platform
-        client: CplnClient = self._get_cpln_client()
+        client: CplnClient = self._get_cpln_client(configuration)
 
         # Parse the infrastructure PID to extract the organization ID, namespace, and job name
         job_org_name, job_namespace, workload_name = self._parse_infrastructure_pid(
