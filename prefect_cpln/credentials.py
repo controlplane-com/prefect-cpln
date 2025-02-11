@@ -243,7 +243,7 @@ class CplnConfig(Block):
     )
 
     ### Private Properties ###
-    _block_type_name = "Control Plane Configuration"
+    _block_type_name = "Cpln Config"
     _logo_url = "https://console.cpln.io/resources/logos/controlPlaneLogoOnly.svg"
     _documentation_url = "https://docs.controlplane.com"  # noqa
 
