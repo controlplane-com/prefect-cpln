@@ -711,7 +711,7 @@ class CplnKubernetesConverter:
         self._k8s_job = k8s_job
 
         # Converter related
-        self._is_identity_overriden = False
+        self._is_identity_overridden = False
 
         # Extract job name from the manifest
         self._k8s_job_name = k8s_job["metadata"]["generateName"]
@@ -781,8 +781,8 @@ class CplnKubernetesConverter:
 
         # Set identity link and override default identity
         if pod_spec.get("serviceAccountName"):
-            # Indicate that the default identity has been overriden
-            self._is_identity_overriden = True
+            # Indicate that the default identity has been overridden
+            self._is_identity_overridden = True
 
             # Extract the service account name
             service_account_name = pod_spec["serviceAccountName"]
@@ -984,7 +984,6 @@ class CplnKubernetesConverter:
                 raise ValueError(
                     f"The secret with the name '{secret_name}' that is being referenced in 'envFrom' must be of type 'dictionary', type found '{secret_type}'."
                 )
-                continue
 
             # For every key in the secret data, create an environment variable and assign it its value
             for key in secret.get("data", {}).keys():
@@ -2044,7 +2043,7 @@ class CplnWorker(BaseWorker):
         if lifecycle_stage == "pending" or lifecycle_stage == "running":
             # Job is still running
             logger.error(
-                "An error occurred while waiting for the job to compelte - exiting...",
+                "An error occurred while waiting for the job to complete - exiting...",
                 exc_info=True,
             )
 
