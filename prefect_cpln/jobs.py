@@ -1,6 +1,7 @@
 """Module to define tasks for interacting with Control Plane jobs."""
 
 import os
+import time
 import requests
 import yaml
 import asyncio
@@ -11,7 +12,7 @@ from prefect_cpln import constants
 from prefect import task
 from prefect.blocks.abstract import JobBlock, JobRun
 from prefect.utilities.asyncutils import sync_compatible
-from prefect_cpln.credentials import CplnCredentials
+from prefect_cpln.credentials import CplnClient, CplnCredentials
 from prefect_cpln.exceptions import CplnJobTimeoutError
 from prefect_cpln.utilities import CplnLogsMonitor
 
@@ -416,8 +417,23 @@ class CplnJob(JobBlock):
         # Prepare the configuration
         configuration.prepare_for_job_run()
 
+        # Get the Control Plane API client
+        client = self.credentials.get_client()
+
+        # Initialize the Control Plane Kubernetes converter
+        self.cpln_k8s_converter = CplnKubernetesConverter(
+            self.logger,
+            client,
+            configuration.org,
+            configuration.namespace,
+            configuration.job_manifest,
+        )
+
         # Convert the Kubernetes job to a Control Plane workload
-        workload = CplnKubernetesConverter(configuration).convert()
+        workload = self.cpln_k8s_converter.convert()
+
+        # Create reliant resources
+        self.cpln_k8s_converter.create_reliant_resources()
 
         # If no location was specified, use the one from the configuration
         if not self.location:
@@ -430,6 +446,20 @@ class CplnJob(JobBlock):
             gvc=self.namespace,
             body=workload,
         )
+
+        # Extract the job name from the job manifest
+        workload_name = created_workload["name"]
+
+        # Log a message to indicate that we are waiting for workload readiness
+        self.logger.info(
+            f"Waiting for the cron workload '{workload_name}' to become ready..."
+        )
+
+        # Wait for the workload to become ready before starting the job
+        self._wait_until_ready(configuration, workload_name, client)
+
+        # Log a message to indicate that workload is ready
+        self.logger.info("Workload is ready!")
 
         # Start the job and get its ID
         command_id = self._start_cpln_job(created_workload)
@@ -461,6 +491,84 @@ class CplnJob(JobBlock):
         return cls(v1_job=yaml_dict, **kwargs)
 
     ### Private Methods ###
+
+    def _wait_until_ready(
+        self,
+        configuration: CplnWorkerJobConfiguration,
+        workload_name: str,
+        client: CplnClient,
+    ):
+        """
+        Wait until the created workload is ready.
+
+        This method repeatedly fetches data from the deployment URL of the workload,
+        checking if it is ready. If not ready, it waits before retrying, up to the
+        specified timeout in pod_watch_timeout_seconds.
+
+        Args:
+            configuration (CplnWorkerJobConfiguration): The worker configuration.
+            workload_name (str): The workload name.
+            client (CplnClient): The Control Plane API client.
+
+        Raises:
+            TimeoutError: If the endpoint does not become ready within the timeout period.
+        """
+
+        # Record the start time to track how long the function has been running
+        start_time = time.time()
+
+        # Construct the workload link
+        workload_link = f"/org/{configuration.org}/gvc/{configuration.namespace}/workload/{workload_name}"
+
+        # Construct the workload deployments link
+        workload_deployments_link = f"{workload_link}/deployment"
+
+        # Start an infinite loop that will keep checking until the timeout is reached
+        while True:
+            # Fetch workload deployments
+            deployment_list = client.get(workload_deployments_link)
+
+            # Check if the response indicates readiness
+            if self._check_workload_readiness(deployment_list, configuration.location):
+                return
+
+            # Check if timeout has been exceeded
+            elapsed_time = time.time() - start_time
+            if elapsed_time >= configuration.pod_watch_timeout_seconds:
+                raise CplnJobTimeoutError(
+                    f"Timeout exceeded while waiting for {workload_deployments_link} to become ready."
+                )
+
+            # Wait before the next attempt
+            time.sleep(constants.RETRY_WORKLOAD_READY_CHECK_SECONDS)
+
+    def _check_workload_readiness(self, deployment_list: dict, location: str) -> bool:
+        """
+        Check if the selected workload location is ready.
+
+        This method iterates over a list of deployments and checks whether the
+        deployment associated with the selected location is marked as ready.
+
+        Args:
+            deployment_list (dict): A dictionary containing deployment details,
+                                    where each deployment has a name and readiness status.
+            location (str): The location name of where the job will run.
+
+        Returns:
+            bool: True if the selected location is ready, False otherwise.
+        """
+
+        # Iterate over each deployment and see if the current selected location is ready or not
+        for deployment in deployment_list["items"]:
+            # Skip any other location and look for the selected location
+            if deployment["name"] != location:
+                continue
+
+            # If we got here, then the location was found, return the value of the ready attribute
+            return deployment.get("status", {}).get("ready", False)
+
+        # If deployment was not found, return False
+        return False
 
     def _start_cpln_job(self, workload: constants.CplnObjectManifest) -> str:
         """
@@ -626,6 +734,10 @@ class CplnJobRun(JobRun[Dict[str, Any]]):
             gvc=self._cpln_job.namespace,
             name=self._workload_name,
         )
+
+        # Delete the reliant resources if the converter is found
+        if self._cpln_job.cpln_k8s_converter:
+            self._cpln_job.cpln_k8s_converter.delete_reliant_resources()
 
         # Log the delete message
         self.logger.info(f"Job {self._workload_name} deleted.")
