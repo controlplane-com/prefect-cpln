@@ -313,11 +313,11 @@ python job.py
 
 If you don't wish to create and use a Control Plane work pool, you can use the `Control Plane Infrastructure` block to define how Prefect flow runs as a job with a Control Plane cron workload. This block functions similarly to the `KubernetesJob` block in Prefect.
 
-### 1. Creating an Agent Work Pool
+### Creating an Agent Work Pool
 
 Before setting up the infrastructure, you need to create an agent work pool and name it `cpln-agent-work-pool` (This name will be used later on. If you wish to name it something else, make sure you change the name below as well). This work pool will allow the Prefect agent to manage flow runs using the `Control Plane Infrastructure`.
 
-### 2. Setting Up the Infrastructure
+### Setting Up the Infrastructure
 
 You can find the `Control Plane Infrastructure` in the Prefect UI under the Blocks page. Alternatively, you can set it up programatically using the code below.
 
@@ -352,7 +352,7 @@ cpln_infra_config_block.save("cpln-infra-config")
 cpln_infra_block.save("cpln-infra")
 ```
 
-### 3. Running a Deployment Using the Infrastructure
+### Running a Deployment Using the Infrastructure
 
 Once the `Control Plane Infrastructure` block is created, you can use it in a Prefect deployment.
 
