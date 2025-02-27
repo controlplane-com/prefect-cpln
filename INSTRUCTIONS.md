@@ -324,7 +324,7 @@ You can find the `Control Plane Infrastructure` in the Prefect UI under the Bloc
 This script will:
 
 - Create a `Control Plane Infrastructure` block.
-- Create a `Control Plane Infrastructure Config` block, which is designed to work specifically with the Control Plane Infrastructure block (similar to the `Control Plane Configuration` block).
+- Create a `Control Plane Infrastructure Config` block, which is designed to work specifically with the `Control Plane Infrastructure` block (similar to the `Control Plane Configuration` block).
 
 Ensure you have Prefect version `cpln-2.20.16` installed locally on your machine. To install it run (Ensure the repository is checked out at the `cpln-2.20.16` tag):
 
