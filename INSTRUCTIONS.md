@@ -50,7 +50,7 @@ To generate the key:
 1. Navigate to the [Control Plane Console](https://console.cpln.io).
 2. Create a service account and assign it to the superusers group.
 3. Navigate to keys and generate a key for the service account.
-4. Store the key securely, as it will be used in the `CplnConfig` when creating the Work Pool.
+4. Store the key securely, as it will be used in the `Control Plane Configuration` block when creating the Work Pool.
 
 ## Deploy the Prefect Server
 
@@ -165,10 +165,10 @@ Once the Prefect server is running, create a Control Plane Work Pool in Prefect.
 
 - Navigate to the Prefect UI and create a new work pool.
 - Select Control Plane as the type.
-- Name it `cpln` (or another name, updating references accordingly).
-- Leave the Organization and Location fields blank unless you wish to override defaults. Control Plane injects `CPLN_ORG`, `CPLN_GVC`, and `CPLN_LOCATION` automatically, so you don't have to set Organization, GVC and location manually.
-- Use the service account key created earlier in the `CplnConfig` for authentication.
-- Add the following environment variable:
+- Name it `cpln` (or another name, please don't forget to update references accordingly down below).
+- Leave the Organization and Location fields blank unless you wish to override defaults. Control Plane injects `CPLN_ORG`, `CPLN_GVC`, and `CPLN_LOCATION` environment variables automatically, so you don't have to set Organization, GVC and location manually.
+- Use the service account key that was created earlier in the `Control Plane Configuration` for authentication.
+- Add the following environment variable to the work pool:
 
 ```json
 { "PREFECT_API_URL": "http://prefect-server.prefect.cpln.local/api" }
@@ -307,4 +307,72 @@ Execute the job:
 
 ```bash
 python job.py
+```
+
+## Using an Infrastructure Block
+
+If you don't wish to create and use a Control Plane work pool, you can use the `Control Plane Infrastructure` block to define how Prefect flow runs as a job with a Control Plane cron workload. This block functions similarly to the `KubernetesJob` block in Prefect.
+
+### 1. Create an Agent Work Pool
+
+Before setting up the infrastructure, you need to create an agent work pool and name it `cpln-agent-work-pool` (This name will be used later on. If you wish to name it something else, make sure you change the name below as well). This work pool will allow the Prefect agent to manage flow runs using the `Control Plane Infrastructure`.
+
+### 2. Setting Up the Infrastructure
+
+You can find the `Control Plane Infrastructure` in the Prefect UI under the Blocks page. Alternatively, you can set it up programatically using the code below.
+
+This script will:
+
+- Create a `Control Plane Infrastructure` block.
+- Create a `Control Plane Infrastructure Config` block, which is designed to work specifically with the Control Plane Infrastructure block (similar to the `Control Plane Configuration` block).
+
+Ensure you have Prefect version `cpln-2.20.16` installed locally on your machine. To install it run (Ensure the repository is checked out at the `cpln-2.20.16` tag):
+
+```bash
+pip install .
+```
+
+Use the following code to create the infrastructure block.
+
+```python
+import os
+from prefect.infrastructure import CplnInfrastructure, CplnInfrastructureConfig
+
+cpln_infra_config_block = CplnInfrastructureConfig(token=os.getenv("CPLN_TOKEN")) # Your Control Plane token here
+kubernetes_manifest = CplnInfrastructure.job_from_file("job_template.yaml") # The path to a Kubernetes job YAML file
+
+cpln_infra_block = CplnInfrastructure(
+    config=cpln_infra_config_block,
+    job=kubernetes_manifest,
+    image="/org/epoch/image/prefect-repo-info-workflow:v1", # The image that contains the flow code in Python
+    env={"PREFECT_API_URL": "http://{PREFECT_ENDPOINT_HERE}/api"},
+)
+
+cpln_infra_config_block.save("cpln-infra-config")
+cpln_infra_block.save("cpln-infra")
+```
+
+### 3. Running a Deployment Using the Infrastructure
+
+Once the `Control Plane Infrastructure` block is created, you can use it in a Prefect deployment.
+
+```python
+from prefect.deployments import Deployment
+from prefect.infrastructure import CplnInfrastructure
+
+# Define CplnJob infrastructure
+control_plane_infrastructure_block = CplnInfrastructure.load("cpln-infra")
+
+# Build the deployment
+deployment = Deployment(
+    name="repo-info-deployment",
+    flow_name="repo_info",
+    path="/opt/prefect/flows",
+    entrypoint="repo_info.py:repo_info",
+    infrastructure=control_plane_infrastructure_block,
+    work_pool_name="cpln-agent-work-pool",
+)
+
+# Apply the deployment
+deployment.apply()
 ```
