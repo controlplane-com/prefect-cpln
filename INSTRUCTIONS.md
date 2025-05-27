@@ -27,10 +27,10 @@ cd prefect
 
 ### 2. Checkout the Required Tag
 
-Switch to the `cpln-2.20.16` tag:
+Switch to the `cpln-2.20.17-20250527` tag:
 
 ```bash
-git checkout tags/cpln-2.20.16
+git checkout tags/cpln-2.20.17-20250527
 ```
 
 ### 3. Build and Push the Image
@@ -38,7 +38,7 @@ git checkout tags/cpln-2.20.16
 Use `cpln` CLI to build and push the Prefect image to your private registry:
 
 ```bash
-cpln image build --name prefect:cpln-2.20.16 --push
+cpln image build --name prefect:cpln-2.20.17-20250527 --push
 ```
 
 ## Create a Service Account Key
@@ -118,7 +118,7 @@ spec:
   identityLink: //gvc/prefect/identity/prefect
   containers:
     - name: prefect
-      image: //image/prefect:cpln-2.20.16 # The image that we pushed in the previous step
+      image: //image/prefect:cpln-2.20.17-20250527 # The image that we pushed in the previous step
       cpu: 500m
       memory: 512Mi
       command: prefect
@@ -189,7 +189,7 @@ spec:
   identityLink: //gvc/prefect/identity/prefect
   containers:
     - name: prefect
-      image: //image/prefect:cpln-2.20.16 # The image that we pushed in the previous step
+      image: //image/prefect:cpln-2.20.17-20250527 # The image that we pushed in the previous step
       cpu: 500m
       memory: 512Mi
       command: prefect
@@ -326,7 +326,7 @@ This script will:
 - Create a `Control Plane Infrastructure` block.
 - Create a `Control Plane Infrastructure Config` block, which is designed to work specifically with the `Control Plane Infrastructure` block (similar to the `Control Plane Configuration` block).
 
-Ensure you have Prefect version `cpln-2.20.16` installed locally on your machine. To install it run (Ensure the repository is checked out at the `cpln-2.20.16` tag):
+Ensure you have Prefect version `cpln-2.20.17-20250527` installed locally on your machine. To install it run (Ensure the repository is checked out at the `cpln-2.20.17-20250527` tag):
 
 ```bash
 pip install .
