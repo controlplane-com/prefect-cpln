@@ -27,10 +27,10 @@ cd prefect
 
 ### 2. Checkout the Required Tag
 
-Switch to the `cpln-2.20.25-20260319` tag:
+Switch to the `cpln-2.20.25-20260401` tag:
 
 ```bash
-git checkout tags/cpln-2.20.25-20260319
+git checkout tags/cpln-2.20.25-20260401
 ```
 
 ### 3. Build and Push the Image
@@ -38,7 +38,7 @@ git checkout tags/cpln-2.20.25-20260319
 Use `cpln` CLI to build and push the Prefect image to your private registry:
 
 ```bash
-cpln image build --name prefect:cpln-2.20.25-20260319 --push
+cpln image build --name prefect:cpln-2.20.25-20260401 --push
 ```
 
 ## Create a Service Account Key
@@ -118,7 +118,7 @@ spec:
   identityLink: //gvc/prefect/identity/prefect
   containers:
     - name: prefect
-      image: //image/prefect:cpln-2.20.25-20260319 # The image that we pushed in the previous step
+      image: //image/prefect:cpln-2.20.25-20260401 # The image that we pushed in the previous step
       cpu: 500m
       memory: 512Mi
       command: prefect
@@ -189,7 +189,7 @@ spec:
   identityLink: //gvc/prefect/identity/prefect
   containers:
     - name: prefect
-      image: //image/prefect:cpln-2.20.25-20260319 # The image that we pushed in the previous step
+      image: //image/prefect:cpln-2.20.25-20260401 # The image that we pushed in the previous step
       cpu: 500m
       memory: 512Mi
       command: prefect
@@ -326,7 +326,7 @@ This script will:
 - Create a `Control Plane Infrastructure` block.
 - Create a `Control Plane Infrastructure Config` block, which is designed to work specifically with the `Control Plane Infrastructure` block (similar to the `Control Plane Configuration` block).
 
-Ensure you have Prefect version `cpln-2.20.25-20260319` installed locally on your machine. To install it run (Ensure the repository is checked out at the `cpln-2.20.25-20260319` tag):
+Ensure you have Prefect version `cpln-2.20.25-20260401` installed locally on your machine. To install it run (Ensure the repository is checked out at the `cpln-2.20.25-20260401` tag):
 
 ```bash
 pip install .
@@ -376,3 +376,159 @@ deployment = Deployment(
 # Apply the deployment
 deployment.apply()
 ```
+
+## Debugging & Troubleshooting
+
+### How Things Are Linked Together
+
+Every flow run execution creates a chain of linked resources across Prefect and Control Plane:
+
+```
+Flow Run (Prefect) → Infrastructure PID → CPLN Workload → CPLN Command → Job Execution
+```
+
+#### Infrastructure PID
+
+When a flow run is submitted, the agent stores an **infrastructure PID** on the flow run in the format:
+
+```
+org:gvc:workload_name:command_id
+```
+
+Example: `my-org:my-gvc:courageous-jaguar:9b38a647-cd2b-47e7-987b-8c4f8b114be6`
+
+This PID links the Prefect flow run to the exact CPLN workload and command. You can find it in the Prefect UI under the flow run's details.
+
+#### Workload Tags
+
+Every workload created by Prefect is tagged for identification:
+
+| Tag                     | Value    | Purpose                                         |
+| ----------------------- | -------- | ----------------------------------------------- |
+| `cpln/createdByPrefect` | `true`   | Identifies Prefect-managed workloads            |
+| `cpln/specHash`         | `<hash>` | Groups workloads with identical specs for reuse |
+| `cpln/prefectJobType`   | `<type>` | Distinguishes job types (e.g., standard, cron)  |
+
+#### Command Tags
+
+Every command (job execution) is tagged with flow run metadata:
+
+| Tag                      | Value                   | Purpose                                        |
+| ------------------------ | ----------------------- | ---------------------------------------------- |
+| `prefect.io/flow-run-id` | `<uuid>`                | Links the command back to the Prefect flow run |
+| `prefect.io/flow-name`   | `<name>`                | The flow name for human identification         |
+| `cpln/prefectAgent`      | `<agent-workload-link>` | Which agent submitted this job                 |
+
+### Log Areas and How to Query Them
+
+All CPLN-related logs use the prefix `[CPLN]` followed by an area identifier. This enables hierarchical filtering with LogQL.
+
+#### Log Format
+
+```
+[CPLN] <Area> | Flow: <name>, RunID: <id>, GVC: <gvc>, Workload: <name>, Cmd: <id> > <message>
+```
+
+#### Areas
+
+| Area                | LogQL Filter                     | What It Covers                                                               |
+| ------------------- | -------------------------------- | ---------------------------------------------------------------------------- |
+| All CPLN            | `\|= "[CPLN]"`                   | Everything CPLN-related                                                      |
+| Job lifecycle       | `\|= "[CPLN] Job"`               | Job creation, start, monitoring, completion, failure                         |
+| Workload management | `\|= "[CPLN] Workload"`          | Workload creation, readiness checks, discovery                               |
+| Sync CPLN→Prefect   | `\|= "[CPLN] Sync CPLN→Prefect"` | Detecting CPLN job failures and updating Prefect state                       |
+| Sync Prefect→CPLN   | `\|= "[CPLN] Sync Prefect→CPLN"` | Detecting completed Prefect flows with active CPLN jobs, sending stopReplica |
+| Kill / Cancel       | `\|= "[CPLN] Kill"`              | Flow run cancellation, stopReplica from kill path                            |
+| Cleanup             | `\|= "[CPLN] Cleanup"`           | Orphaned workload deletion (24h TTL)                                         |
+| Log streaming       | `\|= "[CPLN] Logs"`              | WebSocket log streaming from CPLN                                            |
+| Initialization      | `\|= "[CPLN] Init"`              | Agent CPLN client creation and validation                                    |
+
+#### Cross-Filtering
+
+Combine area filters with entity identifiers to narrow down:
+
+```bash
+# All logs for a specific flow run
+cpln logs '{gvc="<gvc>", workload="<agent-workload>"}' --org <org> --since 1h \
+  |= "[CPLN]" |= "<flow-run-id>" -o raw
+
+# All logs for a specific CPLN workload
+cpln logs '{gvc="<gvc>", workload="<agent-workload>"}' --org <org> --since 1h \
+  |= "[CPLN]" |= "<workload-name>" -o raw
+
+# All logs for a specific command
+cpln logs '{gvc="<gvc>", workload="<agent-workload>"}' --org <org> --since 1h \
+  |= "[CPLN]" |= "<command-id>" -o raw
+```
+
+### Common Debugging Scenarios
+
+#### Flow run completed on Prefect but CPLN job is still running
+
+This typically happens when sidecar containers don't exit after the main container finishes.
+
+1. Find the flow run ID in the Prefect UI
+2. Query the agent logs for the Prefect→CPLN sync:
+   ```bash
+   cpln logs '{gvc="<gvc>", workload="<agent-workload>"}' --org <org> --since 1h \
+     |= "[CPLN] Sync Prefect→CPLN" |= "<flow-run-id>" -o raw
+   ```
+3. Look for `"Sending stopReplica"` — if present, the sync detected the mismatch
+4. Look for `"terminated successfully"` — if present, the job was stopped
+5. If no sync logs appear, check init logs for client creation errors: `|= "[CPLN] Init"`
+
+#### Flow run stuck in RUNNING on Prefect but CPLN job no longer exists
+
+1. Query the agent logs for the CPLN→Prefect sync:
+   ```bash
+   cpln logs '{gvc="<gvc>", workload="<agent-workload>"}' --org <org> --since 1h \
+     |= "[CPLN] Sync CPLN→Prefect" |= "<flow-run-id>" -o raw
+   ```
+2. Look for `"Got 404"` — the CPLN command no longer exists
+3. After 5 consecutive 404s (~5 minutes at 60s intervals), the agent automatically marks the flow run as CRASHED
+4. If not resolving: check the infrastructure PID on the flow run — it may be malformed or reference a different org
+
+#### Job failed to start
+
+1. Query the job lifecycle logs:
+   ```bash
+   cpln logs '{gvc="<gvc>", workload="<agent-workload>"}' --org <org> --since 1h \
+     |= "[CPLN] Job" |= "<flow-run-id>" -o raw
+   ```
+2. Look for `"Creating Control Plane job..."` followed by error messages
+3. Check workload readiness:
+   ```bash
+   cpln logs '{gvc="<gvc>", workload="<agent-workload>"}' --org <org> --since 1h \
+     |= "[CPLN] Workload" |= "<flow-run-id>" -o raw
+   ```
+
+#### Agent not syncing or not detecting stale jobs
+
+1. Verify the sync loops are running (these log at debug level when idle):
+   ```bash
+   cpln logs '{gvc="<gvc>", workload="<agent-workload>"}' --org <org> --since 5m \
+     |= "[CPLN] Sync" -o raw
+   ```
+2. Check for initialization errors:
+   ```bash
+   cpln logs '{gvc="<gvc>", workload="<agent-workload>"}' --org <org> --since 5m \
+     |= "[CPLN] Init" -o raw
+   ```
+
+### Understanding the Bidirectional Sync
+
+The agent runs two sync loops every 60 seconds (configurable via `PREFECT_AGENT_CPLN_MONITOR_INTERVAL`):
+
+**`sync_cpln_to_prefect`** (CPLN is source of truth → updates Prefect)
+
+- Queries Prefect for RUNNING flow runs with infrastructure PIDs
+- For each, checks the CPLN command's lifecycle stage
+- If CPLN says `completed` / `failed` / `cancelled` → updates the Prefect flow run state to match
+- If the command returns 404 for 5 consecutive cycles → marks the flow run as CRASHED
+
+**`sync_prefect_to_cpln`** (Prefect is source of truth → stops CPLN jobs)
+
+- Queries CPLN for running `runCronWorkload` commands scoped to this agent (via `cpln/prefectAgent` tag)
+- For each, reads the `prefect.io/flow-run-id` tag and checks Prefect for the flow run state
+- If the flow run is terminal (COMPLETED / FAILED / CRASHED / CANCELLED) but the CPLN command is still running → sends `stopReplica`
+- Tracks termination progress and logs duration until the stop completes
